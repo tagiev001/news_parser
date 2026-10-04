@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 .idea
 data.json
+static/temp
+parced_news.db
