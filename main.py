@@ -1,167 +1,196 @@
+import logging
 import random
+import sqlite3
+import time
+import warnings
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup
 import schedule
-import time
-from datetime import datetime
-import sqlite3
-import warnings
-from bs4 import GuessedAtParserWarning
+from bs4 import BeautifulSoup, GuessedAtParserWarning
 
 warnings.filterwarnings('ignore', category=GuessedAtParserWarning)
-# url = "https://mtuci.ru/about_the_university/news/"
 
 PATTERN_OUT = "%d.%m.%y"
-date = datetime.strftime(datetime.today().date(), PATTERN_OUT)
-PATTERN_OUT2 = "%d"
-day = datetime.strftime(datetime.today().date(), PATTERN_OUT2)
+DATABASE_PATH = Path(__file__).resolve().with_name('parced_news.db')
+REQUEST_TIMEOUT = 20
+logger = logging.getLogger(__name__)
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0'}
 
 
-def NewsDump(currentArticle, title, university_name, img):
-    connection = sqlite3.connect('parced_news.db')
-    cursor = connection.cursor()
-    p = ''
-    for i in currentArticle.findAll('p'):
-        if i.text.strip:
-            p += '\n' + i.text.strip()
-    cursor.execute("select news_title from Posts;")
-    News_name = cursor.fetchall()
-    connection.commit()
-    # print(News_name)
+def fetch_soup(url):
+    response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return BeautifulSoup(response.text, 'lxml')
 
-    for i in range(len(News_name)):
-        if News_name[i][0].strip() == title:
-            p = ''
-    if p != '':
-        cursor.execute(
+
+def news_exists(title, university_name):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        row = connection.execute(
+            'SELECT 1 FROM Posts WHERE university_name = ? AND TRIM(news_title) = ? LIMIT 1;',
+            (university_name, title.strip())
+        ).fetchone()
+    return row is not None
+
+
+def image_url(item, base_url):
+    image = item.find('img')
+    if image is None:
+        return None
+    source = image.get('data-src') or image.get('src')
+    return urljoin(base_url, source) if source else None
+
+
+def NewsDump(currentArticle, title, university_name, img_url):
+    title = title.strip()
+    if not title:
+        logger.warning('Skipping article with an empty title from %s', university_name)
+        return
+    if news_exists(title, university_name):
+        return
+    if currentArticle is None:
+        logger.warning('Skipping %r from %s: article body was not found', title, university_name)
+        return
+
+    paragraphs = [
+        paragraph.get_text(' ', strip=True)
+        for paragraph in currentArticle.find_all('p')
+        if paragraph.get_text(' ', strip=True)
+    ]
+    article_text = '\n'.join(paragraphs)
+    if not article_text:
+        logger.warning('Skipping %r from %s: article contains no paragraph text', title, university_name)
+        return
+
+    img = None
+    if img_url:
+        time.sleep(random.randint(1, 3))
+        try:
+            response = requests.get(img_url, headers=headers, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            img = response.content
+        except requests.RequestException:
+            logger.exception('Could not download image for %r from %s', title, university_name)
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
             'INSERT INTO Posts (news_title, news_text, university_name, news_date, news_img, deleted) '
             'VALUES (?, ?, ?, ?, ?, ?);',
-            (title, p, university_name, str(date), img, '0'))
-        connection.commit()
-    connection.close()
+            (title, article_text, university_name, datetime.today().strftime(PATTERN_OUT), img, 0)
+        )
+    logger.info('Saved article %r from %s', title, university_name)
 
 
 def MTUCI_check():
     url = 'https://mtuci.ru/about_the_university/news/'
-    startPagebs = BeautifulSoup(requests.get(url, headers=headers).text, 'lxml')
-    block = startPagebs.findAll('div', class_="news-list__item")
-    block.append(startPagebs.find('div', class_="news-list__first-item"))
+    block = fetch_soup(url).select('.news-list__item, .news-list__first-item')
     university_name = 'МТУСИ'
 
-    # connection = sqlite3.connect('parced_news.db')
-    # cursor = connection.cursor()
-
     for item in block:
-        if item.find('p', class_="meta").text.strip() == date:
-            currentNew_url = "https://mtuci.ru" + item.find('a').attrs['href']
-            time.sleep(random.randint(3, 8))
-            currentArticle = BeautifulSoup(requests.get(currentNew_url, headers=headers).text, "lxml").find('div',
-                                                                                                            class_="news-single")
-            img_src = "https://mtuci.ru" + item.find('img').attrs['src']
-            time.sleep(random.randint(3, 8))
-            img = requests.get(img_src, headers=headers).content
-            title = str(currentArticle.find('h2', class_="text-center").text.strip())
-            print(title)
-            NewsDump(currentArticle, title, university_name, img)
-    #         p = ''
-    #         for i in currentArticle.findAll('p'):
-    #             if i.text.strip:
-    #                 p += '\n' + i.text.strip()
-    #         cursor.execute("select news_title from Posts;")
-    #         News_name = cursor.fetchall()
-    #         connection.commit()
-    #         # print(News_name)
-    #
-    #         for i in range(len(News_name)):
-    #             if News_name[i][0].strip() == title:
-    #                 p = ''
-    #         if p != '':
-    #             cursor.execute(
-    #                 'INSERT INTO Posts (news_title, news_text, university_name, news_date, news_img, deleted) '
-    #                 'VALUES (?, ?, ?, ?, ?, ?);',
-    #                 (title, p, university_name, str(date), img, '0'))
-    #             connection.commit()
-    # connection.close()
+        title_element = item.find('p', class_='title')
+        link = item.find('a', href=True, string=True)
+        title = title_element.get_text(' ', strip=True) if title_element else (
+            link.get_text(' ', strip=True) if link else ''
+        )
+        if title and news_exists(title, university_name):
+            continue
+        if link is None:
+            continue
+        time.sleep(random.randint(1, 3))
+        article = fetch_soup(urljoin(url, link['href']))
+        article_body = article.find('div', class_='news-single')
+        heading = article.find('h2', class_='text-center')
+        title = heading.get_text(' ', strip=True) if heading else title
+        NewsDump(article_body, title, university_name, image_url(item, url))
 
 
 def MAI_check():
     url = "https://mai.ru/press/news/"
-    startPagebs = BeautifulSoup(requests.get(url, headers=headers).text, "lxml")
-    block = startPagebs.findAll('div', class_="col-sm-6 col-lg-6 mb-3 mb-lg-5")
+    block = fetch_soup(url).select('div.col-sm-6.col-lg-6.mb-3.mb-lg-5')
     university_name = 'МАИ'
-    # connection = sqlite3.connect('parced_news.db')
-    # cursor = connection.cursor()
 
     for item in block:
-        if int(str(item.find('span', class_="badge bg-primary rounded-pill fw-normal px-2").text[:2]).strip()) == int(
-                day):
-            currentNew_url = url + item.find('a', class_="card h-100 card-transition").attrs['href']
-            time.sleep(random.randint(3, 8))
-            currentArticle = BeautifulSoup(requests.get(currentNew_url, headers=headers).text, "lxml").find('article',
-                                                                                                            itemprop="articleBody")
-            img_src = 'https://mai.ru/' + item.find('img', class_="card-img-top").attrs['src']
-            time.sleep(random.randint(3, 8))
-            img = requests.get(img_src, headers=headers).content
-            title = currentArticle.find('h1').text.strip()
-            print(title)
-            NewsDump(currentArticle,title,university_name,img)
+        title_element = item.find('h5')
+        title = title_element.get_text(' ', strip=True) if title_element else ''
+        if title and news_exists(title, university_name):
+            continue
+        link = item.find('a', class_='card-transition', href=True)
+        if link is None:
+            continue
+        time.sleep(random.randint(1, 3))
+        article = fetch_soup(urljoin(url, link['href']))
+        article_body = article.find('article', itemprop='articleBody')
+        heading = article.find('h1')
+        title = heading.get_text(' ', strip=True) if heading else title
+        NewsDump(article_body, title, university_name, image_url(item, url))
 
 
 def Baum_check():
     url = "https://kf.bmstu.ru/news"
-    startPagebs = BeautifulSoup(requests.get(url, headers=headers).text, "lxml")
-    block = startPagebs.findAll('div', class_="l-news-list-col col-12 col-md-4")
+    block = fetch_soup(url).select('div.l-news-list-col.col-12.col-md-4')
     university_name = 'МГТУ им. Баумана'
     for item in block:
-        if int(item.find('span', class_="l-news-date").find('span').text) == int(day):
-            currentNew_url = 'https://kf.bmstu.ru' + item.find('a', class_="l-news-element").attrs['href']
-            time.sleep(random.randint(3, 8))
-            currentArticle = BeautifulSoup(requests.get(currentNew_url, headers=headers).text, "lxml").find('div', class_ ="l-typography-text")
-
-            title = item.find('span', class_="l-news-title").text
-            print(title)
-            img_src = 'https://kf.bmstu.ru/' + item.find('img').attrs['src']
-            time.sleep(random.randint(3, 8))
-            img = requests.get(img_src, headers=headers).content
-            NewsDump(currentArticle, title, university_name, img)
+        title_element = item.find('span', class_='l-news-title')
+        title = title_element.get_text(' ', strip=True) if title_element else ''
+        if title and news_exists(title, university_name):
+            continue
+        link = item.find('a', class_='l-news-element', href=True)
+        if link is None:
+            continue
+        time.sleep(random.randint(1, 3))
+        article = fetch_soup(urljoin(url, link['href']))
+        article_body = article.find('div', class_='l-typography-text')
+        heading = article.find('h1')
+        title = heading.get_text(' ', strip=True) if heading else title
+        NewsDump(article_body, title, university_name, image_url(item, url))
 
 
 def MIREA_check():
     url = 'https://www.mirea.ru/news/'
-    startPagebs = BeautifulSoup(requests.get(url, headers=headers).text, 'lxml')
-    block = startPagebs.findAll('div', class_="uk-card uk-card-default")
+    listing = fetch_soup(url)
+    block = listing.select('a.news-block-slider-grid__item[href]')
+    if not block:
+        block = listing.select('div.uk-card.uk-card-default')
     university_name = 'МИРЭА'
     for item in block:
-        # print(date[:5])
-        if item.find('div', class_="uk-margin-small-bottom uk-text-small").text.strip()[:5] == date[:5]:
-            currentNew_url = "https://www.mirea.ru" + item.find('a').attrs['href']
-            time.sleep(random.randint(3,8))
-            newpage =  BeautifulSoup(requests.get(currentNew_url, headers=headers).text, 'lxml')
-            currentArticle =newpage.find('div', class_="news-item-text uk-margin-bottom")
-            title = item.find('a', class_="uk-link-reset").text
-            print(title)
-            img_src = 'https://www.mirea.ru' + newpage.find('div', class_="uk-card uk-card-default").find('img').attrs['src']
-            img = requests.get(img_src, headers=headers).content
-            NewsDump(currentArticle, title, university_name, img)
+        link = item if item.name == 'a' and item.get('href') else item.find('a', href=True)
+        if link is None:
+            continue
+        title_element = item.find('div', class_='events-block-body') or item.find('a', class_='uk-link-reset')
+        title = (
+            item.get('title')
+            or (title_element.get_text(' ', strip=True) if title_element else '')
+        )
+        if title and news_exists(title, university_name):
+            continue
+        time.sleep(random.randint(1, 3))
+        article = fetch_soup(urljoin(url, link['href']))
+        article_body = article.select_one('.news-item-text')
+        heading = article.find('h1')
+        title = heading.get_text(' ', strip=True) if heading else title
+        NewsDump(article_body, title, university_name, image_url(item, url))
 
 
+def news_check():
+    for check in (MTUCI_check, MAI_check, Baum_check, MIREA_check):
+        try:
+            check()
+        except Exception:
+            logger.exception('News check failed: %s', check.__name__)
 
 
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    news_check()
+    schedule.every().hour.do(news_check)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 
-
-
-MTUCI_check()
-MAI_check()
-Baum_check()
-MIREA_check()
-
-
-# schedule.every().hour.do(news_check)
-
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
+if __name__ == '__main__':
+    main()

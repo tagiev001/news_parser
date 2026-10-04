@@ -27,7 +27,7 @@
                     {{ article.text }}
                 </div>
                 <div class="article_image">
-                        <img src="{{ url_for('static', filename='temp/' + article.id + '.jpeg') }}" alt="Article Image">
+                        <img src="{{ url_for('article_image', article_id=article.id) }}" alt="Article Image">
                 </div>
                 <div class="empty_block"></div>
                 </div>
