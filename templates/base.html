@@ -2,37 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="{{ url_for('static',filename='main.css') }}">
+    {% block title %}
     <title>Новости ВУЗов</title>
-
+    {% endblock %}
 </head>
-<body>
-<div class="wrapper">
+<body class="{% block body_class %}{% endblock %}">
+<div class="site-shell">
     {% block menu %}
     <header class="header">
-        <div class="logo">
-            <img src="{{ url_for('static',filename='img/deletephone-Photoroom.png')}}">
-        </div>
+        <a class="brand" href="{{ url_for('homepage') }}" aria-label="Новости ВУЗов — главная">
+            <img src="{{ url_for('static', filename='img/deletephone-Photoroom.png') }}"
+                 alt="" aria-hidden="true">
+        </a>
         <ul class="mainmenu">
-            <li><a href="{{url_for('homepage')}}" class="button"><p>Новости</p></a></li>
-            <li><a href="{{url_for('about')}}" class="button"><p>О нас</p></a></li>
-
-
+            <li><a href="{{url_for('homepage')}}" class="button">Новости</a></li>
+            <li><a href="{{url_for('statistics')}}" class="button">Статистика</a></li>
+            <li><a href="{{url_for('about')}}" class="button">О нас</a></li>
         </ul>
-
     </header>
-    {% endblock  menu %}
-    {% block homepage%}
+    {% endblock menu %}
+    <main class="page-content">
+    {% block homepage %}
     {% endblock  homepage%}
+    </main>
 </div>
-    {% block footer%}
-    <div class="footer">
-        Туда-сюда и готово!<br>
-        СВО
-
-
-
-    </div>
-    {% endblock  footer%}
+{% block footer %}
+<footer class="footer">Новости университетов</footer>
+{% endblock footer %}
 </body>
 </html>

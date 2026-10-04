@@ -1,42 +1,515 @@
 {% extends 'base.html' %}
 
 {% block title %}
-<title>Главная страница</title>
+<title>Новости ВУЗов</title>
 {% endblock %}
 
 {% block homepage %}
-<style>
-  .bold {
-    font-weight: bold;
-    font-size: 16px;
-  }
-</style>
-<div class="wrapper">
-                {% for article in articles %}
-                <div class="article">
-                <div class="title_article">
-                    {{ article.title }}
-                </div>
-                <div class="news_date">
-                    {{ article.date }}
-                </div>
-                <div class="university_name">
-                    {{ article.name }}
-                </div>
-                <div class="text_article">
-                    {{ article.text }}
-                </div>
-                <div class="article_image">
-                        <img src="{{ url_for('article_image', article_id=article.id) }}" alt="Article Image">
-                </div>
-                <div class="empty_block"></div>
-                </div>
-                {% endfor %}
+<section class="news-page" aria-labelledby="news-heading">
+    <div class="page-heading">
+        <div class="heading-copy">
+            <h1 id="news-heading">Последние события</h1>
+        </div>
+    </div>
 
+    <form class="search-form" id="search-form" role="search">
+        <label class="visually-hidden" for="search-query">Поиск по новостям</label>
+        <input id="search-query" name="q" type="search" maxlength="100"
+               placeholder="Найти новость или университет">
+        <button type="submit">Найти</button>
+        <button class="search-clear" id="search-clear" type="button" hidden>Сбросить</button>
+    </form>
+    <p class="search-status" id="search-status" role="status" aria-live="polite"></p>
+    <div class="search-results" id="search-results" aria-live="polite" hidden></div>
+    <p class="statistics-status" id="statistics-status" role="status" aria-live="polite"
+       {% if statistics_available %}hidden{% endif %}>
+        Статистика временно недоступна; новости по-прежнему доступны.
+    </p>
 
-</div>
-<div class="show_more">
-    <button id="load">Показать больше</button>
-</div>
+    <div class="news-grid" id="news-grid" aria-live="polite">
+        {% for article in articles %}
+        <article class="news-tile{% if loop.first %} news-tile-featured{% endif %}"
+                 data-post-id="{{ article.id }}"
+                 data-statistics-available="{{ 'true' if statistics_available else 'false' }}">
+            <div class="tile-image">
+                <img src="{{ article.image_url }}" alt="" loading="lazy"
+                     onerror="this.closest('.tile-image').hidden = true">
+            </div>
+            <div class="tile-content">
+                <div class="tile-meta">
+                    <span class="tile-university">{{ article.name }}</span>
+                    <time class="tile-date">{{ article.date }}</time>
+                </div>
+                <h2 class="tile-title">{{ article.title }}</h2>
+                <p class="tile-summary">{{ article.text }}</p>
+                <div class="tile-engagement">
+                    <span class="post-views" data-post-views="{{ article.id }}">
+                        <span aria-hidden="true">◉</span> Просмотры:
+                        <span class="view-count">{{ article.views if article.views is not none else '—' }}</span>
+                    </span>
+                    <button class="like-button" type="button" data-post-id="{{ article.id }}"
+                            aria-pressed="false" aria-label="Нравится"
+                            {% if not statistics_available %}disabled{% endif %}>
+                        <span aria-hidden="true">♥</span>
+                        <span class="like-count">{{ article.likes if article.likes is not none else '—' }}</span>
+                    </button>
+                </div>
+                <button class="read-more" type="button"
+                        data-article-title="{{ article.title }}">
+                    Читать полностью
+                </button>
+                <template class="full-article-text">{{ article.text }}</template>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
 
+    <p class="load-status" id="load-status" role="status" aria-live="polite"></p>
+    <div class="show-more">
+        <button id="load" type="button" {% if not has_more %}hidden{% endif %}>
+            <span>Показать ещё</span>
+            <span class="button-arrow" aria-hidden="true">↓</span>
+        </button>
+    </div>
+
+    <dialog class="article-dialog" id="article-dialog" aria-labelledby="dialog-title">
+        <div class="dialog-header">
+            <h2 id="dialog-title"></h2>
+            <button class="dialog-close" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <p class="dialog-engagement">
+            <span><span aria-hidden="true">◉</span> Просмотры: <span class="dialog-view-count">—</span></span>
+            <span><span aria-hidden="true">♥</span> <span class="dialog-like-count">—</span></span>
+        </p>
+        <p class="engagement-status" id="engagement-status" role="status" aria-live="polite"></p>
+        <div class="dialog-content">
+            <p class="dialog-text" id="dialog-text"></p>
+            <section class="comments-section" aria-labelledby="comments-heading">
+                <h3 id="comments-heading">Комментарии</h3>
+                <p class="comments-status" id="comments-status" role="status" aria-live="polite"></p>
+                <ol class="comments-list" id="comments-list"></ol>
+                <form class="comment-form" id="comment-form">
+                    <label for="comment-nick">Ваш ник</label>
+                    <input id="comment-nick" name="nick" maxlength="40" required>
+                    <label for="comment-text">Комментарий</label>
+                    <textarea id="comment-text" name="text" rows="3" maxlength="2000" required></textarea>
+                    <button type="submit">Отправить комментарий</button>
+                </form>
+            </section>
+        </div>
+    </dialog>
+</section>
+
+<script>
+(() => {
+    const grid = document.getElementById('news-grid');
+    const button = document.getElementById('load');
+    const status = document.getElementById('load-status');
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-query');
+    const searchButton = searchForm.querySelector('button[type="submit"]');
+    const searchClear = document.getElementById('search-clear');
+    const searchResults = document.getElementById('search-results');
+    const searchStatus = document.getElementById('search-status');
+    const statisticsStatus = document.getElementById('statistics-status');
+    const dialog = document.getElementById('article-dialog');
+    const dialogTitle = document.getElementById('dialog-title');
+    const dialogText = document.getElementById('dialog-text');
+    const engagementStatus = document.getElementById('engagement-status');
+    const commentsList = document.getElementById('comments-list');
+    const commentsStatus = document.getElementById('comments-status');
+    const commentForm = document.getElementById('comment-form');
+    const commentNick = document.getElementById('comment-nick');
+    const commentText = document.getElementById('comment-text');
+    const closeDialog = dialog.querySelector('.dialog-close');
+    const searchArticles = new WeakMap();
+    const voterStorageKey = 'news-parser-voter-id';
+    const likedPostsKey = 'news-parser-liked-posts';
+    let voterId = localStorage.getItem(voterStorageKey);
+    if (!voterId) {
+        voterId = crypto.randomUUID();
+        localStorage.setItem(voterStorageKey, voterId);
+    }
+    let likedPosts = new Set(JSON.parse(localStorage.getItem(likedPostsKey) || '[]'));
+    document.querySelectorAll('.like-button').forEach(likeButton => {
+        const isLiked = likedPosts.has(likeButton.dataset.postId);
+        likeButton.setAttribute('aria-pressed', String(isLiked));
+        likeButton.classList.toggle('is-liked', isLiked);
+    });
+    let offset = grid.children.length;
+    let loading = false;
+    let searchSequence = 0;
+
+    function updateEngagement(articleId, views, likes) {
+        document.querySelectorAll(`[data-post-views="${articleId}"] .view-count`).forEach(
+            counter => {
+                counter.textContent = views;
+                counter.dataset.lastValue = views;
+            }
+        );
+        document.querySelectorAll(`.like-button[data-post-id="${articleId}"] .like-count`).forEach(
+            counter => {
+                counter.textContent = likes;
+                counter.dataset.lastValue = likes;
+            }
+        );
+        const dialogViews = dialog.querySelector('.dialog-view-count');
+        const dialogLikes = dialog.querySelector('.dialog-like-count');
+        if (dialog.dataset.postId === String(articleId)) {
+            dialogViews.textContent = views;
+            dialogLikes.textContent = likes;
+            dialogViews.dataset.lastValue = views;
+            dialogLikes.dataset.lastValue = likes;
+        }
+    }
+
+    function setStatisticsAvailable(available) {
+        statisticsStatus.hidden = available;
+        document.querySelectorAll('.news-tile').forEach(tile => {
+            tile.dataset.statisticsAvailable = String(available);
+        });
+        document.querySelectorAll('.view-count, .like-count').forEach(counter => {
+            if (available) {
+                counter.textContent = counter.dataset.lastValue || counter.textContent;
+            } else {
+                counter.dataset.lastValue = counter.textContent === '—' ? '' : counter.textContent;
+                counter.textContent = '—';
+            }
+        });
+        const dialogViews = dialog.querySelector('.dialog-view-count');
+        const dialogLikes = dialog.querySelector('.dialog-like-count');
+        if (available) {
+            dialogViews.textContent = dialogViews.dataset.lastValue || dialogViews.textContent;
+            dialogLikes.textContent = dialogLikes.dataset.lastValue || dialogLikes.textContent;
+        } else {
+            dialogViews.dataset.lastValue = dialogViews.textContent === '—' ? '' : dialogViews.textContent;
+            dialogLikes.dataset.lastValue = dialogLikes.textContent === '—' ? '' : dialogLikes.textContent;
+            dialogViews.textContent = '—';
+            dialogLikes.textContent = '—';
+        }
+        document.querySelectorAll('.like-button').forEach(likeButton => {
+            likeButton.disabled = !available;
+        });
+    }
+
+    function openArticle(articleId, title, text, views, likes, statisticsAvailable = false) {
+        dialogTitle.textContent = title;
+        dialogText.textContent = text;
+        dialog.dataset.postId = articleId;
+        dialog.querySelector('.dialog-view-count').textContent = views ?? '—';
+        dialog.querySelector('.dialog-like-count').textContent = likes ?? '—';
+        engagementStatus.textContent = statisticsAvailable ? '' : 'Статистика временно недоступна.';
+        commentsStatus.textContent = '';
+        commentsList.replaceChildren();
+        dialog.showModal();
+
+        if (statisticsAvailable) {
+            fetch(`/posts/${articleId}/view`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ voter_id: voterId })
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Не удалось записать просмотр (${response.status})`);
+                    return response.json();
+                })
+                .then(data => updateEngagement(articleId, data.views, likes))
+                .catch(error => {
+                    engagementStatus.textContent = error.message;
+                    setStatisticsAvailable(false);
+                });
+        }
+
+        loadComments(articleId);
+    }
+
+    async function loadComments(articleId) {
+        commentsStatus.textContent = 'Загрузка комментариев…';
+        try {
+            const response = await fetch(`/comments/posts/${articleId}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Ошибка загрузки (${response.status})`);
+            commentsList.replaceChildren();
+            data.comments.forEach(comment => commentsList.append(createComment(comment)));
+            commentsStatus.textContent = data.comments.length ? '' : 'Пока нет комментариев.';
+        } catch (error) {
+            commentsStatus.textContent = error.message || 'Не удалось загрузить комментарии.';
+        }
+    }
+
+    function createComment(comment) {
+        const item = document.createElement('li');
+        item.className = 'comment-item';
+        const heading = document.createElement('div');
+        heading.className = 'comment-meta';
+        const nick = document.createElement('strong');
+        nick.textContent = comment.nick;
+        const date = document.createElement('time');
+        date.textContent = new Date(comment.created_at).toLocaleString();
+        heading.append(nick, date);
+        const text = document.createElement('p');
+        text.textContent = comment.text;
+        item.append(heading, text);
+        return item;
+    }
+
+    document.addEventListener('click', event => {
+        const readButton = event.target.closest('.read-more');
+        if (readButton) {
+            const article = readButton.closest('.news-tile');
+            openArticle(
+                article.dataset.postId,
+                readButton.dataset.articleTitle,
+                readButton.parentElement.querySelector('.full-article-text').content.textContent,
+                article.querySelector('.view-count').textContent,
+                article.querySelector('.like-count').textContent,
+                article.dataset.statisticsAvailable === 'true'
+            );
+            return;
+        }
+
+        const resultButton = event.target.closest('.search-open');
+        if (resultButton) {
+            const article = searchArticles.get(resultButton);
+            openArticle(
+                article.id,
+                article.title,
+                article.text,
+                article.views,
+                article.likes,
+                article.statistics_available === true
+            );
+        }
+    });
+
+    commentForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const articleId = dialog.dataset.postId;
+        const submitButton = commentForm.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        commentsStatus.textContent = '';
+        try {
+            const response = await fetch(`/comments/posts/${articleId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ nick: commentNick.value, text: commentText.value })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Ошибка отправки (${response.status})`);
+            commentsList.append(createComment(data.comment));
+            commentsStatus.textContent = 'Комментарий добавлен.';
+            commentText.value = '';
+        } catch (error) {
+            commentsStatus.textContent = error.message || 'Не удалось отправить комментарий.';
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
+
+    searchForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const query = searchInput.value.trim();
+        const sequence = ++searchSequence;
+        searchStatus.textContent = '';
+        searchResults.replaceChildren();
+        if (!query) {
+            searchResults.hidden = true;
+            grid.hidden = false;
+            searchClear.hidden = true;
+            return;
+        }
+
+        grid.hidden = true;
+        searchResults.hidden = false;
+        searchClear.hidden = false;
+        searchButton.disabled = true;
+        searchStatus.textContent = 'Ищем новости…';
+        try {
+            const response = await fetch(`/search-api?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Ошибка поиска (${response.status})`);
+            if (sequence !== searchSequence) return;
+            searchStatus.textContent = data.results.length
+                ? `Найдено новостей: ${data.results.length}`
+                : 'По вашему запросу ничего не найдено.';
+            data.results.forEach(article => searchResults.append(createSearchResult(article)));
+        } catch (error) {
+            if (sequence === searchSequence) {
+                searchStatus.textContent = error.message || 'Сервис поиска временно недоступен.';
+            }
+        } finally {
+            searchButton.disabled = false;
+        }
+    });
+
+    searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        searchResults.replaceChildren();
+        searchResults.hidden = true;
+        searchClear.hidden = true;
+        searchStatus.textContent = '';
+        grid.hidden = false;
+        searchInput.focus();
+    });
+
+    function createSearchResult(article) {
+        const item = document.createElement('article');
+        item.className = 'search-result';
+        const meta = document.createElement('p');
+        meta.className = 'search-result-meta';
+        meta.textContent = `${article.name} · ${article.date}`;
+        const title = document.createElement('h2');
+        title.textContent = article.title;
+        const text = document.createElement('p');
+        text.textContent = article.text;
+        const openButton = document.createElement('button');
+        openButton.className = 'search-open';
+        openButton.type = 'button';
+        openButton.textContent = 'Открыть новость и комментарии';
+        searchArticles.set(openButton, article);
+        item.append(meta, title, text, openButton);
+        return item;
+    }
+
+    grid.addEventListener('click', async event => {
+        const likeButton = event.target.closest('.like-button');
+        if (!likeButton || likeButton.disabled) return;
+        likeButton.disabled = true;
+        try {
+            const response = await fetch(`/posts/${likeButton.dataset.postId}/like`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ voter_id: voterId })
+            });
+            if (!response.ok) throw new Error(`Не удалось поставить отметку (${response.status})`);
+            const data = await response.json();
+            likeButton.setAttribute('aria-pressed', String(data.liked));
+            likeButton.classList.toggle('is-liked', data.liked);
+            if (data.liked) likedPosts.add(likeButton.dataset.postId);
+            else likedPosts.delete(likeButton.dataset.postId);
+            localStorage.setItem(likedPostsKey, JSON.stringify([...likedPosts]));
+            updateEngagement(likeButton.dataset.postId, likeButton.closest('.news-tile').querySelector('.view-count').textContent, data.likes);
+        } catch (error) {
+            status.textContent = error.message;
+        } finally {
+            likeButton.disabled = false;
+        }
+    });
+
+    closeDialog.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => {
+        if (event.target === dialog) dialog.close();
+    });
+
+    function createTile(article, statisticsAvailable) {
+        const tile = document.createElement('article');
+        tile.className = 'news-tile';
+        tile.dataset.postId = article.id;
+        tile.dataset.statisticsAvailable = String(statisticsAvailable);
+
+        if (article.image_url) {
+            const imageFrame = document.createElement('div');
+            imageFrame.className = 'tile-image';
+
+            const image = document.createElement('img');
+            image.src = article.image_url;
+            image.alt = '';
+            image.loading = 'lazy';
+            image.addEventListener('error', () => imageFrame.remove(), { once: true });
+            imageFrame.append(image);
+            tile.append(imageFrame);
+        }
+
+        const content = document.createElement('div');
+        content.className = 'tile-content';
+        const meta = document.createElement('div');
+        meta.className = 'tile-meta';
+
+        const university = document.createElement('span');
+        university.className = 'tile-university';
+        university.textContent = article.name;
+
+        const date = document.createElement('time');
+        date.className = 'tile-date';
+        date.textContent = article.date;
+        meta.append(university, date);
+
+        const title = document.createElement('h2');
+        title.className = 'tile-title';
+        title.textContent = article.title;
+
+        const summary = document.createElement('p');
+        summary.className = 'tile-summary';
+        summary.textContent = article.text;
+
+        const engagement = document.createElement('div');
+        engagement.className = 'tile-engagement';
+        const views = document.createElement('span');
+        views.className = 'post-views';
+        views.dataset.postViews = article.id;
+        views.innerHTML = `<span aria-hidden="true">◉</span> Просмотры: <span class="view-count">${article.views ?? '—'}</span>`;
+        const likeButton = document.createElement('button');
+        likeButton.className = 'like-button';
+        likeButton.type = 'button';
+        likeButton.dataset.postId = article.id;
+        likeButton.disabled = !statisticsAvailable;
+        likeButton.setAttribute('aria-pressed', 'false');
+        likeButton.setAttribute('aria-label', 'Нравится');
+        likeButton.innerHTML = `<span aria-hidden="true">♥</span> <span class="like-count">${article.likes ?? '—'}</span>`;
+        const isLiked = likedPosts.has(String(article.id));
+        likeButton.setAttribute('aria-pressed', String(isLiked));
+        likeButton.classList.toggle('is-liked', isLiked);
+        engagement.append(views, likeButton);
+
+        const readButton = document.createElement('button');
+        readButton.className = 'read-more';
+        readButton.type = 'button';
+        readButton.textContent = 'Читать полностью';
+        readButton.dataset.articleTitle = article.title;
+        const fullText = document.createElement('template');
+        fullText.className = 'full-article-text';
+        fullText.content.textContent = article.text;
+        content.append(meta, title, summary, engagement, readButton, fullText);
+        tile.append(content);
+        return tile;
+    }
+
+    button.addEventListener('click', async () => {
+        if (loading) return;
+        loading = true;
+        button.disabled = true;
+        button.textContent = 'Загрузка…';
+        status.textContent = '';
+
+        try {
+            const response = await fetch(
+                `{{ url_for('load_articles') }}?offset=${offset}&limit={{ page_size }}`,
+                { headers: { Accept: 'application/json' } }
+            );
+            if (!response.ok) {
+                throw new Error(`Не удалось загрузить новости (${response.status})`);
+            }
+
+            const data = await response.json();
+            setStatisticsAvailable(data.statistics_available);
+            data.articles.forEach(article => {
+                const tile = createTile(article, data.statistics_available);
+                tile.querySelectorAll('.view-count, .like-count').forEach(counter => {
+                    counter.dataset.lastValue = counter.textContent === '—' ? '' : counter.textContent;
+                });
+                grid.append(tile);
+            });
+            offset += data.articles.length;
+            button.hidden = !data.has_more;
+            button.innerHTML = '<span>Показать ещё</span><span class="button-arrow" aria-hidden="true">↓</span>';
+        } catch (error) {
+            status.textContent = error.message || 'Не удалось загрузить новости. Попробуйте ещё раз.';
+            button.textContent = 'Повторить загрузку';
+        } finally {
+            loading = false;
+            button.disabled = false;
+        }
+    });
+})();
+</script>
 {% endblock %}

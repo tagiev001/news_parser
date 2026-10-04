@@ -1,48 +1,102 @@
 {% extends 'base.html' %}
 
+{% block body_class %}about-page{% endblock %}
 
 {% block title %}
-
+<title>О проекте — Новости ВУЗов</title>
 {% endblock %}
 
 {% block homepage %}
-<div class="wrapper">
-        <div class="empty_block"></div>
-    <div class="about">
-        <h1>Выполнили студенты группы БКК2201</h1>
-    <ul>Тагиев Р.Н.</ul>
-    <ul>Савельев В.О.</ul>
-    <h1>Используемый стек</h1>
-    <ul>Flask</ul>
-    <ul>SQLite</ul>
-    <ul>Beautiful Soup</ul>
-    <ul>CSS</ul>
-    <ul>HTML</ul>
-    <h1>Используемые ресурсы</h1>
-   <a href="http://mtuci.ru"> <ul>mtuci.ru</ul> </a>
+<section class="about-page-content" aria-labelledby="about-title">
+    <header class="about-hero">
+        <p class="about-eyebrow">О проекте</p>
+        <h1 id="about-title">Новости ВУЗов</h1>
+        <p class="about-intro">
+            Один сайт, чтобы следить за новостями университетов и не пропускать важное.
+        </p>
+    </header>
+
+    <div class="about-grid">
+        <section class="about-card about-project">
+            <span class="about-card-number" aria-hidden="true">01</span>
+            <h2>Что это за проект</h2>
+            <p>
+                Сайт собирает публикации университетов в одной ленте.
+                Свежие новости можно читать здесь, не переходя между сайтами вузов.
+            </p>
+        </section>
+
+        <section class="about-card">
+            <span class="about-card-number" aria-hidden="true">02</span>
+            <h2>Авторы</h2>
+            <ul class="about-people">
+                <li>
+                    <a href="https://github.com/tagiev001" target="_blank" rel="noopener noreferrer">
+                        @tagiev001
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/vitaliy7878" target="_blank" rel="noopener noreferrer">
+                        @vitaliy7878
+                    </a>
+                </li>
+            </ul>
+        </section>
+
+        <section class="about-card">
+            <span class="about-card-number" aria-hidden="true">03</span>
+            <h2>Технологии</h2>
+            <dl class="about-stack">
+                <div>
+                    <dt>Серверная часть</dt>
+                    <dd>Python · Flask</dd>
+                </div>
+                <div>
+                    <dt>Сбор новостей</dt>
+                    <dd>Requests · Beautiful Soup · Schedule</dd>
+                </div>
+                <div>
+                    <dt>Отдельные сервисы</dt>
+                    <dd>Поиск · Комментарии · Статистика</dd>
+                </div>
+                <div>
+                    <dt>Хранение данных</dt>
+                    <dd>SQLite</dd>
+                </div>
+                <div>
+                    <dt>Интерфейс</dt>
+                    <dd>HTML · CSS · JavaScript</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="about-card about-source">
+            <span class="about-card-number" aria-hidden="true">04</span>
+            <h2>Источники новостей</h2>
+            <p>Публикации университетов, которые входят в новостную ленту:</p>
+            <ul class="about-sources">
+                <li>
+                    <a href="https://mtuci.ru/about_the_university/news/" target="_blank" rel="noopener noreferrer">
+                        МТУСИ <span aria-hidden="true">↗</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://mai.ru/press/news/" target="_blank" rel="noopener noreferrer">
+                        МАИ <span aria-hidden="true">↗</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://kf.bmstu.ru/news" target="_blank" rel="noopener noreferrer">
+                        Калужский филиал МГТУ им. Баумана <span aria-hidden="true">↗</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="https://www.mirea.ru/news/" target="_blank" rel="noopener noreferrer">
+                        РТУ МИРЭА <span aria-hidden="true">↗</span>
+                    </a>
+                </li>
+            </ul>
+        </section>
     </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</div>
-
+</section>
 {% endblock homepage %}
-
