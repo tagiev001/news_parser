@@ -14,8 +14,13 @@ export DATABASE_URL='postgresql://user:password@localhost:5432/news_parser'
 ```
 
 The applications create their tables with `CREATE TABLE IF NOT EXISTS` when
-the first database connection is made. Existing SQLite databases are not
-imported or migrated.
+the first database connection is made. News posts live in the `news` schema
+(shared by the site and crawler), comments live in `comments`, and views and
+likes live in `statistics`. The database user must be allowed to create
+schemas. Search reads the site API and does not connect to PostgreSQL. Existing
+tables in `public` are not moved automatically; migrate them before deployment
+if their data must be preserved. Existing SQLite databases are not imported or
+migrated.
 
 Start each process from the project root in a separate terminal:
 

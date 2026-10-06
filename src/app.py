@@ -1,23 +1,51 @@
 
+from datetime import datetime
 from io import BytesIO
 import os
 from pathlib import Path
 import requests
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
-from .database import get_connection
+from .database import NEWS_SCHEMA, get_connection
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DB_UNAVAILABLE = object()
+
+
+def parse_article_date(value):
+    if not value:
+        return datetime.min
+    for fmt in ("%d.%m.%y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(str(value), fmt)
+        except ValueError:
+            continue
+    return datetime.min
+
+
+def sort_articles_by_date_desc(rows):
+    return sorted(rows, key=lambda row: parse_article_date(row[4] if len(row) > 4 else row[3]), reverse=True)
+
+
+def safe_db_call(default, description, callback):
+    try:
+        return callback()
+    except Exception:
+        app.logger.exception("Database unavailable while %s", description)
+        return default
+
+
 app = Flask(
     __name__,
     template_folder=PROJECT_ROOT / "templates",
     static_folder=PROJECT_ROOT / "static",
 )
 PAGE_SIZE = 9
+STATISTICS_PAGE_SIZE = 10
 COMMENTS_SERVICE_URL = os.environ.get("COMMENTS_SERVICE_URL", "http://127.0.0.1:45001")
 SEARCH_SERVICE_URL = os.environ.get("SEARCH_SERVICE_URL", "http://127.0.0.1:45002")
-STATISTICS_SERVICE_URL = os.environ.get("STATISTICS_SERVICE_URL", "http://127.0.0.1:45003")
+STATISTICS_SERVICE_URL = os.environ.get("STATISTICS_SERVICE_URL", "http://127.0.0.1:45005")
 SERVICE_TIMEOUT = 7
 SITE_HOST = os.environ.get("SITE_HOST", "0.0.0.0")
 SITE_PORT = int(os.environ.get("SITE_PORT", "45000"))
@@ -42,6 +70,7 @@ def get_post_stats(post_ids):
                 int(row["post_id"]): {
                     "views": int(row["views"]),
                     "likes": int(row["likes"]),
+                    "comments": int(row["comments"]),
                 }
                 for row in stats
             })
@@ -52,12 +81,21 @@ def get_post_stats(post_ids):
 
 
 def get_articles_from_db(limit=PAGE_SIZE, offset=0):
-    with get_connection() as connection:
-        data = connection.execute(
-            "SELECT id, news_title, news_text, university_name, news_date "
-            "FROM posts WHERE deleted = 0 ORDER BY id DESC LIMIT %s OFFSET %s",
-            (limit + 1, offset)
-        ).fetchall()
+    def load_rows():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT id, news_title, news_text, university_name, news_date "
+                "FROM posts WHERE deleted = 0 ORDER BY id DESC LIMIT %s OFFSET %s",
+                (limit + 1, offset)
+            ).fetchall()
+
+    data = safe_db_call(DB_UNAVAILABLE, "loading news rows", load_rows)
+    if data is DB_UNAVAILABLE:
+        return [], False, False
+    if not data:
+        return [], False, True
+
+    data = sort_articles_by_date_desc(data)
     stats, statistics_available = get_post_stats([row[0] for row in data[:limit]])
     articles = [
         {
@@ -69,6 +107,7 @@ def get_articles_from_db(limit=PAGE_SIZE, offset=0):
             "image_url": f"/article-image/{article_id}",
             "views": stats.get(article_id, {}).get("views"),
             "likes": stats.get(article_id, {}).get("likes"),
+            "comments": stats.get(article_id, {}).get("comments"),
         }
         for article_id, title, text, name, date in data[:limit]
     ]
@@ -112,11 +151,24 @@ def load_articles():
 
 @app.route("/statistics")
 def statistics():
-    with get_connection() as connection:
-        rows = connection.execute(
-            "SELECT id, news_title, university_name, news_date "
-            "FROM posts WHERE deleted = 0 ORDER BY id DESC"
-        ).fetchall()
+    def load_rows():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT id, news_title, university_name, news_date "
+                "FROM posts WHERE deleted = 0 ORDER BY id DESC"
+            ).fetchall()
+
+    rows = safe_db_call(DB_UNAVAILABLE, "loading statistics rows", load_rows)
+    if rows is DB_UNAVAILABLE:
+        return render_template(
+            "statistics.html",
+            articles=[],
+            article_count=0,
+            total_views=None,
+            total_likes=None,
+            total_comments=None,
+            statistics_available=False,
+        )
 
     stats, statistics_available = get_post_stats([row[0] for row in rows])
     articles = [
@@ -127,6 +179,7 @@ def statistics():
             "date": date,
             "views": stats.get(article_id, {}).get("views"),
             "likes": stats.get(article_id, {}).get("likes"),
+            "comments": stats.get(article_id, {}).get("comments"),
         }
         for article_id, title, name, date in rows
     ]
@@ -134,26 +187,36 @@ def statistics():
         articles.sort(key=lambda article: (article["views"], article["likes"]), reverse=True)
         total_views = sum(article["views"] for article in articles)
         total_likes = sum(article["likes"] for article in articles)
+        total_comments = sum(article["comments"] for article in articles)
     else:
-        total_views = total_likes = None
+        total_views = total_likes = total_comments = None
 
+    article_count = len(articles)
+    articles = articles[:STATISTICS_PAGE_SIZE]
     return render_template(
         "statistics.html",
         articles=articles,
-        article_count=len(articles),
+        article_count=article_count,
         total_views=total_views,
         total_likes=total_likes,
+        total_comments=total_comments,
         statistics_available=statistics_available,
     )
 
 
 @app.route("/api/search-index")
 def search_index():
-    with get_connection() as connection:
-        rows = connection.execute(
-            "SELECT id, news_title, news_text, university_name, news_date "
-            "FROM posts WHERE deleted = 0 ORDER BY id DESC"
-        ).fetchall()
+    def load_rows():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT id, news_title, news_text, university_name, news_date "
+                "FROM posts WHERE deleted = 0 ORDER BY id DESC"
+            ).fetchall()
+
+    rows = safe_db_call(DB_UNAVAILABLE, "loading search index rows", load_rows)
+    if rows is DB_UNAVAILABLE:
+        return jsonify([])
+    rows = sort_articles_by_date_desc(rows)
     return jsonify([
         {
             "id": article_id,
@@ -193,11 +256,16 @@ def search_api():
 
 @app.route("/comments/posts/<int:post_id>", methods=["GET", "POST"])
 def comments_api(post_id):
-    with get_connection() as connection:
-        exists = connection.execute(
-            "SELECT 1 FROM posts WHERE id = %s AND deleted = 0",
-            (post_id,)
-        ).fetchone()
+    def check_post_exists():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT 1 FROM posts WHERE id = %s AND deleted = 0",
+                (post_id,)
+            ).fetchone()
+
+    exists = safe_db_call(DB_UNAVAILABLE, "checking whether post exists", check_post_exists)
+    if exists is DB_UNAVAILABLE:
+        return jsonify(error="The requested service is temporarily unavailable"), 503
     if exists is None:
         abort(404, description="Post not found")
 
@@ -220,11 +288,16 @@ def toggle_post_like(article_id):
 
 
 def proxy_post_stat_event(article_id, event):
-    with get_connection() as connection:
-        exists = connection.execute(
-            "SELECT 1 FROM posts WHERE id = %s AND deleted = 0",
-            (article_id,)
-        ).fetchone()
+    def check_post_exists():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT 1 FROM posts WHERE id = %s AND deleted = 0",
+                (article_id,)
+            ).fetchone()
+
+    exists = safe_db_call(DB_UNAVAILABLE, f"checking post {article_id} before {event}", check_post_exists)
+    if exists is DB_UNAVAILABLE:
+        return jsonify(error="The requested service is temporarily unavailable"), 503
     if exists is None:
         abort(404, description="Post not found")
     return proxy_service_json(
@@ -241,11 +314,16 @@ def about():
 
 @app.route("/article-image/<int:article_id>")
 def article_image(article_id):
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT news_img FROM posts WHERE id = %s AND deleted = 0",
-            (article_id,)
-        ).fetchone()
+    def load_image():
+        with get_connection(NEWS_SCHEMA) as connection:
+            return connection.execute(
+                "SELECT news_img FROM posts WHERE id = %s AND deleted = 0",
+                (article_id,)
+            ).fetchone()
+
+    row = safe_db_call(DB_UNAVAILABLE, f"loading image for article {article_id}", load_image)
+    if row is DB_UNAVAILABLE:
+        return jsonify(error="The requested service is temporarily unavailable"), 503
     if row is None or row[0] is None:
         abort(404)
     return send_file(BytesIO(row[0]), mimetype="image/jpeg")

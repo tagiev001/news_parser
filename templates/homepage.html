@@ -401,6 +401,29 @@
         if (event.target === dialog) dialog.close();
     });
 
+    function parseDate(value) {
+        if (!value) return 0;
+        const normalized = String(value).trim();
+        const direct = Date.parse(normalized.replace(/\./g, '/'));
+        if (!Number.isNaN(direct)) return direct;
+        const match = normalized.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+        if (match) {
+            const [, day, month, yearRaw] = match;
+            const year = Number(yearRaw) < 100 ? 2000 + Number(yearRaw) : Number(yearRaw);
+            return Date.parse(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+        }
+        return 0;
+    }
+
+    function sortArticlesByDateDesc(articles) {
+        return [...articles].sort((left, right) => {
+            const leftDate = parseDate(left.date || left.news_date);
+            const rightDate = parseDate(right.date || right.news_date);
+            if (leftDate !== rightDate) return rightDate - leftDate;
+            return Number(right.id || 0) - Number(left.id || 0);
+        });
+    }
+
     function createTile(article, statisticsAvailable) {
         const tile = document.createElement('article');
         tile.className = 'news-tile';
@@ -492,7 +515,8 @@
 
             const data = await response.json();
             setStatisticsAvailable(data.statistics_available);
-            data.articles.forEach(article => {
+            const orderedArticles = sortArticlesByDateDesc(data.articles);
+            orderedArticles.forEach(article => {
                 const tile = createTile(article, data.statistics_available);
                 tile.querySelectorAll('.view-count, .like-count').forEach(counter => {
                     counter.dataset.lastValue = counter.textContent === '—' ? '' : counter.textContent;

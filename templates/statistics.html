@@ -9,7 +9,7 @@
     <header class="statistics-heading">
         <p class="eyebrow">Активность читателей</p>
         <h1 id="statistics-heading">Статистика новостей</h1>
-        <p>Уникальные просмотры и отметки «Нравится» для публикаций на сайте.</p>
+        <p>Просмотры, отметки «Нравится» и комментарии к публикациям на сайте.</p>
     </header>
 
     <div class="statistics-summary">
@@ -24,6 +24,10 @@
         <article class="statistics-card">
             <span class="statistics-card-label">Отметки «Нравится»</span>
             <strong>{{ total_likes if total_likes is not none else '—' }}</strong>
+        </article>
+        <article class="statistics-card">
+            <span class="statistics-card-label">Комментарии</span>
+            <strong>{{ total_comments if total_comments is not none else '—' }}</strong>
         </article>
     </div>
 
@@ -44,6 +48,7 @@
                         <th scope="col">Дата</th>
                         <th scope="col">Просмотры</th>
                         <th scope="col">Нравится</th>
+                        <th scope="col">Комментарии</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -54,10 +59,11 @@
                         <td>{{ article.date }}</td>
                         <td>{{ article.views if article.views is not none else '—' }}</td>
                         <td>{{ article.likes if article.likes is not none else '—' }}</td>
+                        <td>{{ article.comments if article.comments is not none else '—' }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="statistics-empty">Пока нет новостей для статистики.</td>
+                        <td colspan="6" class="statistics-empty">Пока нет новостей для статистики.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

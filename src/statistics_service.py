@@ -2,13 +2,14 @@ import os
 import uuid
 
 from flask import Flask, abort, jsonify, request
+from psycopg import sql
 
-from .database import get_connection
+from .database import COMMENTS_SCHEMA, STATISTICS_SCHEMA, get_connection
 
 
 app = Flask(__name__)
 SERVICE_HOST = os.environ.get("STATISTICS_SERVICE_HOST", "0.0.0.0")
-SERVICE_PORT = int(os.environ.get("STATISTICS_SERVICE_PORT", "45003"))
+SERVICE_PORT = int(os.environ.get("STATISTICS_SERVICE_PORT", "45005"))
 MAX_BATCH_SIZE = 100
 
 
@@ -26,7 +27,7 @@ def record_view(post_id):
         abort(400, description="Post ID must be positive")
     voter_id = parse_voter_id(request.get_json(silent=True))
 
-    with get_connection() as connection:
+    with get_connection(STATISTICS_SCHEMA) as connection:
         cursor = connection.execute(
             "INSERT INTO post_views (post_id, voter_id) VALUES (%s, %s) "
             "ON CONFLICT (post_id, voter_id) DO NOTHING RETURNING post_id",
@@ -45,7 +46,7 @@ def toggle_like(post_id):
         abort(400, description="Post ID must be positive")
     voter_id = parse_voter_id(request.get_json(silent=True))
 
-    with get_connection() as connection:
+    with get_connection(STATISTICS_SCHEMA) as connection:
         inserted = connection.execute(
             "INSERT INTO post_likes (post_id, voter_id) VALUES (%s, %s) "
             "ON CONFLICT (post_id, voter_id) DO NOTHING RETURNING post_id",
@@ -81,7 +82,7 @@ def get_stats():
         abort(400, description="Post IDs must be positive")
 
     placeholders = ",".join("%s" for _ in post_ids)
-    with get_connection() as connection:
+    with get_connection(STATISTICS_SCHEMA) as connection:
         view_counts = dict(connection.execute(
             f"SELECT post_id, COUNT(*) FROM post_views WHERE post_id IN ({placeholders}) GROUP BY post_id",
             post_ids
@@ -90,8 +91,31 @@ def get_stats():
             f"SELECT post_id, COUNT(*) FROM post_likes WHERE post_id IN ({placeholders}) GROUP BY post_id",
             post_ids
         ).fetchall())
+        comments_schema_exists = connection.execute(
+            "SELECT to_regnamespace(%s)",
+            (COMMENTS_SCHEMA,)
+        ).fetchone()[0] is not None
+        if comments_schema_exists:
+            comments_table = sql.Identifier(COMMENTS_SCHEMA, "comments")
+            comment_counts = dict(connection.execute(
+                sql.SQL(
+                    "SELECT post_id, COUNT(*) FROM {} "
+                    "WHERE post_id IN ({}) GROUP BY post_id"
+                ).format(
+                    comments_table,
+                    sql.SQL(", ").join(sql.Placeholder() for _ in post_ids)
+                ),
+                post_ids
+            ).fetchall())
+        else:
+            comment_counts = {}
     stats = [
-        {"post_id": post_id, "views": view_counts.get(post_id, 0), "likes": like_counts.get(post_id, 0)}
+        {
+            "post_id": post_id,
+            "views": view_counts.get(post_id, 0),
+            "likes": like_counts.get(post_id, 0),
+            "comments": comment_counts.get(post_id, 0),
+        }
         for post_id in post_ids
     ]
     return jsonify(stats=stats)

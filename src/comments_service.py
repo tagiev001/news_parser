@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
 
-from .database import get_connection
+from .database import COMMENTS_SCHEMA, get_connection
 
 
 app = Flask(__name__)
@@ -18,7 +18,7 @@ def post_comments(post_id):
         return jsonify(error="Post ID must be positive"), 400
 
     if request.method == "GET":
-        with get_connection() as connection:
+        with get_connection(COMMENTS_SCHEMA) as connection:
             rows = connection.execute(
                 "SELECT id, nick, text, created_at FROM comments "
                 "WHERE post_id = %s ORDER BY id",
@@ -46,7 +46,7 @@ def post_comments(post_id):
         return jsonify(error=f"Comment must contain 1 to {MAX_COMMENT_LENGTH} characters"), 400
 
     created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    with get_connection() as connection:
+    with get_connection(COMMENTS_SCHEMA) as connection:
         cursor = connection.execute(
             "INSERT INTO comments (post_id, nick, text, created_at) "
             "VALUES (%s, %s, %s, %s) RETURNING id, nick, text, created_at",

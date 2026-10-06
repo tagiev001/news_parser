@@ -10,7 +10,7 @@ import requests
 import schedule
 from bs4 import BeautifulSoup, GuessedAtParserWarning
 
-from .database import get_connection
+from .database import NEWS_SCHEMA, get_connection
 
 warnings.filterwarnings('ignore', category=GuessedAtParserWarning)
 
@@ -82,7 +82,7 @@ def parse_published_date(value):
 def update_existing_news_date(title, university_name, published_date):
     if published_date is None:
         return
-    with get_connection() as connection:
+    with get_connection(NEWS_SCHEMA) as connection:
         connection.execute(
             'UPDATE posts SET news_date = %s WHERE university_name = %s AND TRIM(news_title) = %s;',
             (published_date, university_name, title.strip())
@@ -90,7 +90,7 @@ def update_existing_news_date(title, university_name, published_date):
 
 
 def news_exists(title, university_name):
-    with get_connection() as connection:
+    with get_connection(NEWS_SCHEMA) as connection:
         row = connection.execute(
             'SELECT 1 FROM posts WHERE university_name = %s AND TRIM(news_title) = %s LIMIT 1;',
             (university_name, title.strip())
@@ -99,7 +99,7 @@ def news_exists(title, university_name):
 
 
 def existing_article_is_empty(title, university_name):
-    with get_connection() as connection:
+    with get_connection(NEWS_SCHEMA) as connection:
         row = connection.execute(
             'SELECT news_text FROM posts WHERE university_name = %s AND TRIM(news_title) = %s LIMIT 1;',
             (university_name, title.strip())
@@ -156,7 +156,7 @@ def NewsDump(currentArticle, title, university_name, img_url, published_date):
         logger.warning('Skipping %r from %s: article contains no paragraph text', title, university_name)
         return
 
-    with get_connection() as connection:
+    with get_connection(NEWS_SCHEMA) as connection:
         existing = connection.execute(
             'SELECT id, news_text FROM posts WHERE university_name = %s AND TRIM(news_title) = %s LIMIT 1;',
             (university_name, title)
@@ -181,7 +181,7 @@ def NewsDump(currentArticle, title, university_name, img_url, published_date):
         except requests.RequestException:
             logger.exception('Could not download image for %r from %s', title, university_name)
 
-    with get_connection() as connection:
+    with get_connection(NEWS_SCHEMA) as connection:
         connection.execute(
             'INSERT INTO posts (news_title, news_text, university_name, news_date, news_img, deleted) '
             'VALUES (%s, %s, %s, %s, %s, %s);',

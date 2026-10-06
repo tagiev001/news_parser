@@ -60,6 +60,8 @@ class StatisticsServiceTests(unittest.TestCase):
         connection.execute.side_effect = [
             Mock(fetchall=Mock(return_value=[])),
             Mock(fetchall=Mock(return_value=[(4, 1)])),
+            Mock(fetchone=Mock(return_value=("comments",))),
+            Mock(fetchall=Mock(return_value=[(4, 3)])),
         ]
         with patch.object(
             statistics_service, "get_connection", return_value=nullcontext(connection)
@@ -69,8 +71,8 @@ class StatisticsServiceTests(unittest.TestCase):
         self.assertEqual(
             stats.get_json()["stats"],
             [
-                {"post_id": 4, "views": 0, "likes": 1},
-                {"post_id": 9, "views": 0, "likes": 0},
+                {"post_id": 4, "views": 0, "likes": 1, "comments": 3},
+                {"post_id": 9, "views": 0, "likes": 0, "comments": 0},
             ],
         )
 
@@ -87,6 +89,24 @@ class StatisticsServiceTests(unittest.TestCase):
                 json={"voter_id": self.voter_id},
             )
         self.assertEqual(unliked.get_json(), {"liked": False, "likes": 0})
+
+    def test_stats_reports_zero_comments_before_comments_schema_exists(self):
+        connection = Mock()
+        connection.execute.side_effect = [
+            Mock(fetchall=Mock(return_value=[])),
+            Mock(fetchall=Mock(return_value=[])),
+            Mock(fetchone=Mock(return_value=(None,))),
+        ]
+        with patch.object(
+            statistics_service, "get_connection", return_value=nullcontext(connection)
+        ):
+            response = self.client.get("/stats?post_id=4")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["stats"],
+            [{"post_id": 4, "views": 0, "likes": 0, "comments": 0}],
+        )
 
     def test_rejects_invalid_voter_id(self):
         response = self.client.post(
