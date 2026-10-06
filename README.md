@@ -31,9 +31,14 @@ python -m src.search_service
 python -m src.statistics_service
 ```
 
+Alternatively, run `bash startup` to start all four services together.
+
 The web processes listen on `0.0.0.0` by default. Override their bind addresses
 with `SITE_HOST`, `COMMENTS_SERVICE_HOST`, `SEARCH_SERVICE_HOST`, and
 `STATISTICS_SERVICE_HOST` if needed.
+The comments, search, and statistics services expose `GET /health` endpoints
+that return HTTP 200 while their process is responding. The statistics page
+checks these endpoints and displays each service's availability.
 
 Run the news scraper separately when required:
 

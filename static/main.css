@@ -254,6 +254,49 @@ body.about-page {
     color: #76500b;
 }
 
+.statistics-health {
+    margin-bottom: 24px;
+    padding: 22px;
+    background: #fff;
+}
+
+.statistics-health h2 {
+    margin: 0 0 14px;
+    color: var(--purple-dark);
+    font-size: 21px;
+}
+
+.statistics-health ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.statistics-health li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    background: #f7f5fa;
+}
+
+.service-available {
+    color: #176b3a;
+}
+
+.service-unavailable {
+    color: #a12626;
+}
+
+.statistics-health > p {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
 .statistics-ranking {
     padding: 22px;
     background: #fff;

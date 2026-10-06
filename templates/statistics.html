@@ -37,6 +37,21 @@
     </p>
     {% endif %}
 
+    <section class="statistics-health" aria-labelledby="services-health-heading">
+        <h2 id="services-health-heading">Состояние сервисов</h2>
+        <ul>
+            {% for service in services_health %}
+            <li>
+                <span>{{ service.name }}</span>
+                <strong class="{{ 'service-available' if service.available else 'service-unavailable' }}">
+                    {{ 'Работает' if service.available else 'Недоступен' }}
+                </strong>
+            </li>
+            {% endfor %}
+        </ul>
+        <p>Проверка доступности: HTTP 200.</p>
+    </section>
+
     <section class="statistics-ranking" aria-labelledby="ranking-heading">
         <h2 id="ranking-heading">Новости по популярности</h2>
         <div class="statistics-table-wrap">
