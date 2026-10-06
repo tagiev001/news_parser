@@ -47,8 +47,30 @@ COMMENTS_SERVICE_URL = os.environ.get("COMMENTS_SERVICE_URL", "http://127.0.0.1:
 SEARCH_SERVICE_URL = os.environ.get("SEARCH_SERVICE_URL", "http://127.0.0.1:45002")
 STATISTICS_SERVICE_URL = os.environ.get("STATISTICS_SERVICE_URL", "http://127.0.0.1:45005")
 SERVICE_TIMEOUT = 7
+HEALTH_CHECK_TIMEOUT = 1
 SITE_HOST = os.environ.get("SITE_HOST", "0.0.0.0")
 SITE_PORT = int(os.environ.get("SITE_PORT", "45000"))
+
+
+def get_services_health():
+    services = (
+        ("Сервис комментариев", COMMENTS_SERVICE_URL),
+        ("Сервис поиска", SEARCH_SERVICE_URL),
+        ("Сервис статистики", STATISTICS_SERVICE_URL),
+    )
+    health = []
+    for name, service_url in services:
+        try:
+            response = requests.get(
+                f"{service_url}/health",
+                timeout=HEALTH_CHECK_TIMEOUT,
+            )
+            available = response.status_code == 200
+        except requests.RequestException as error:
+            app.logger.warning("%s health check failed: %s", name, error)
+            available = False
+        health.append({"name": name, "available": available})
+    return health
 
 
 def get_post_stats(post_ids):
@@ -151,6 +173,8 @@ def load_articles():
 
 @app.route("/statistics")
 def statistics():
+    services_health = get_services_health()
+
     def load_rows():
         with get_connection(NEWS_SCHEMA) as connection:
             return connection.execute(
@@ -168,6 +192,7 @@ def statistics():
             total_likes=None,
             total_comments=None,
             statistics_available=False,
+            services_health=services_health,
         )
 
     stats, statistics_available = get_post_stats([row[0] for row in rows])
@@ -201,6 +226,7 @@ def statistics():
         total_likes=total_likes,
         total_comments=total_comments,
         statistics_available=statistics_available,
+        services_health=services_health,
     )
 
 

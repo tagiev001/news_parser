@@ -15,6 +15,11 @@ MAX_RESULTS = 50
 SERVICE_HOST = os.environ.get("SEARCH_SERVICE_HOST", "0.0.0.0")
 
 
+@app.route("/health")
+def health():
+    return jsonify(status="ok")
+
+
 @app.route("/search")
 def search():
     query = request.args.get("q", "").strip()

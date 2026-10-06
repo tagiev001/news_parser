@@ -21,6 +21,11 @@ def parse_voter_id(payload):
         abort(400, description="A valid voter_id is required")
 
 
+@app.route("/health")
+def health():
+    return jsonify(status="ok")
+
+
 @app.route("/posts/<int:post_id>/views", methods=["POST"])
 def record_view(post_id):
     if post_id < 1:

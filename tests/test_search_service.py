@@ -42,6 +42,12 @@ class SearchServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("error", response.get_json())
 
+    def test_health_check_returns_http_200(self):
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"status": "ok"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,11 @@ MAX_COMMENT_LENGTH = 2000
 SERVICE_HOST = os.environ.get("COMMENTS_SERVICE_HOST", "0.0.0.0")
 
 
+@app.route("/health")
+def health():
+    return jsonify(status="ok")
+
+
 @app.route("/posts/<int:post_id>/comments", methods=["GET", "POST"])
 def post_comments(post_id):
     if post_id < 1:
