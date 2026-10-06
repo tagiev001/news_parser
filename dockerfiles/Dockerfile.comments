@@ -1,0 +1,16 @@
+FROM python:3.14-slim
+
+WORKDIR /comments
+
+ENV COMMENTS_SERVICE_HOST=0.0.0.0
+ENV COMMENTS_SERVICE_PORT=45001
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/__init__.py ./src/
+COPY src/comments_service.py ./src/
+COPY src/database.py ./src/
+
+CMD ["python", "-m", "src.comments_service"]
