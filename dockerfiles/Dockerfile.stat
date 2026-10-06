@@ -1,0 +1,17 @@
+FROM python:3.14-slim
+
+WORKDIR /stat
+
+
+ENV STATISTICS_SERVICE_HOST="0.0.0.0"
+ENV STATISTICS_SERVICE_PORT=45003
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/__init__.py ./src/
+COPY src/statistics_service.py ./src/
+COPY src/database.py ./src/
+
+CMD ["python", "-m", "src.statistics_service"]

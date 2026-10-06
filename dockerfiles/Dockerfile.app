@@ -2,8 +2,10 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-ENV COMMENTS_SERVICE_URL=http://comments-service:45001
-ENV SEARCH_SERVICE_URL=http://search-service:8000
+ENV STATISTICS_SERVICE_URL=http://np.stat:45003
+ENV SEARCH_SERVICE_URL=http://np.search:45002
+ENV COMMENTS_SERVICE_URL=http://np.comments:45001
+
 
 COPY requirements.txt .
 

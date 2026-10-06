@@ -1,0 +1,18 @@
+FROM python:3.14-slim
+
+WORKDIR /search
+
+ENV SEARCH_SERVICE_HOST="0.0.0.0"
+ENV SEARCH_SERVICE_PORT=45002
+
+ENV NEWS_INDEX_URL=http://np.app:45000/api/search-index
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/__init__.py ./src/
+COPY src/search_service.py ./src/
+
+
+CMD ["python", "-m", "src.search_service"]

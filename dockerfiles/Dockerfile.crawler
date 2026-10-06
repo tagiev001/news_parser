@@ -1,0 +1,15 @@
+FROM python:3.14-slim
+
+WORKDIR /crawler
+
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/__init__.py ./src/
+COPY src/crawler_service.py ./src/
+COPY src/database.py ./src/
+
+
+CMD ["python", "-m", "src.crawler_service"]
