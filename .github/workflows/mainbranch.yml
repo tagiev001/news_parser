@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/rtagiev001/news_parser
+  IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   test-build-push:
