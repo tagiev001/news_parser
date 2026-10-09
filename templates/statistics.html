@@ -31,6 +31,18 @@
         </article>
     </div>
 
+    <section class="services-health" aria-labelledby="services-health-heading">
+        <h2 id="services-health-heading">Состояние сервисов</h2>
+        <ul class="services-health-list">
+            {% for service in services_health %}
+            <li class="service-status {{ 'service-available' if service.available else 'service-unavailable' }}">
+                <span>{{ service.name }}</span>
+                <strong>{{ 'Доступен' if service.available else 'Недоступен' }}</strong>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
     {% if not statistics_available %}
     <p class="statistics-unavailable" role="status">
         Сервис статистики временно недоступен. Список новостей доступен, счётчики появятся после восстановления сервиса.

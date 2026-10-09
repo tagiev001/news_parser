@@ -247,6 +247,47 @@ body.about-page {
     font-weight: 600;
 }
 
+.services-health {
+    margin-bottom: 24px;
+    padding: 22px;
+    background: #fff;
+}
+
+.services-health h2 {
+    margin: 0 0 14px;
+    color: var(--purple-dark);
+    font-size: 21px;
+}
+
+.services-health-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.service-status {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    background: #f7f6fa;
+}
+
+.service-status strong {
+    white-space: nowrap;
+}
+
+.service-available strong {
+    color: #237044;
+}
+
+.service-unavailable strong {
+    color: #a33a36;
+}
+
 .statistics-unavailable {
     margin: 0 0 20px;
     padding: 14px 16px;
@@ -1000,6 +1041,10 @@ body.about-page {
     }
 
     .statistics-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .services-health-list {
         grid-template-columns: minmax(0, 1fr);
     }
 
